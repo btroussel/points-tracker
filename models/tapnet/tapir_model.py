@@ -86,7 +86,7 @@ class TAPIR(nn.Module):
         blocks_per_group: Sequence[int] = (2, 2, 2, 2),
         feature_extractor_chunk_size: int = 10,
         extra_convs: bool = True,
-        use_casual_conv: bool = False,
+        use_causal_conv: bool = False,
     ):
         super().__init__()
 
@@ -102,7 +102,7 @@ class TAPIR(nn.Module):
         self.initial_resolution = tuple(initial_resolution)
         self.feature_extractor_chunk_size = feature_extractor_chunk_size
         self.num_mixer_blocks = num_mixer_blocks
-        self.use_casual_conv = use_casual_conv
+        self.use_causal_conv = use_causal_conv
 
         highres_dim = 128
         lowres_dim = 256
@@ -129,7 +129,7 @@ class TAPIR(nn.Module):
         dim = 4 + self.highres_dim + self.lowres_dim
         input_dim = dim + (self.pyramid_level + 2) * 49
         self.torch_pips_mixer = nets.PIPSMLPMixer(
-            input_dim, dim, use_causal_conv=self.use_casual_conv
+            input_dim, dim, use_causal_conv=self.use_causal_conv
         )
 
         if extra_convs:

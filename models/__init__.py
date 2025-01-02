@@ -1,8 +1,8 @@
 from .point_tracker import TAPIR
 
 
-def build_model(model_type):
-    if model_type == "tapir":
+def build_point_tracker(tracker_type):
+    if tracker_type == "tapir":
         return TAPIR()
     else:
-        raise NotImplementedError(f"Model {model_type} not implemented")
+        raise NotImplementedError(f"Model {tracker_type} not implemented")

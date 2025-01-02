@@ -3,10 +3,12 @@ import os
 import torch
 import cv2
 from PIL import Image
+
+import torch.nn.functional as F
 from torchvision import models, transforms
 from bpy.types import Panel, Operator, PropertyGroup
 
-from .models import build_model
+from .models import build_point_tracker
 from .utils import get_vars_from_context
 
 
@@ -160,10 +162,10 @@ class StartTracking(Operator):
 
     def __init__(self):
         super().__init__()
-        self.model_type = "tapir"
+        self.tracker_type = "tapir"
 
     def _build_model(self):
-        self.model = build_model(self.model_type)
+        self.tracker = build_point_tracker(self.tracker_type)
 
         if torch.cuda.is_available():
             device = torch.device("cuda")
@@ -173,13 +175,12 @@ class StartTracking(Operator):
             device = torch.device("cpu")
 
         self.device = device
-        self.model = self.model.to(device)
-        self.model.eval()
+        self.tracker = self.tracker.to(device)
+        self.tracker.eval()
 
         return True
 
     def _retrieve_selected_tracks(self, context):
-        # TODO : I could use this function in other methods ?
         """
         Retrieves the selected tracks from the scene's stored selection.
 
@@ -189,20 +190,17 @@ class StartTracking(Operator):
         """
         # Get the selected track names from the scene property
         selected_track_names = [item.name for item in context.scene.selected_tracks]
-
         if not selected_track_names:
             self.report({"ERROR"}, "No points selected. Please select points first.")
             return None
 
+        # Retrieve all track from the clip that match names
         clip = context.edit_movieclip
         if clip is None:
             self.report({"ERROR"}, "No movie clip selected")
             return None
 
-        # Retrieve all tracks from the clip
         tracks = clip.tracking.tracks
-
-        # Find tracks that match the selected names
         selected_tracks = [
             track for track in tracks if track.name in selected_track_names
         ]
@@ -211,7 +209,17 @@ class StartTracking(Operator):
             self.report({"ERROR"}, "Selected tracks not found in the current clip.")
             return None
 
-        return selected_tracks
+        # Extract track data for each selected track (last frame for now)
+        query_points = []
+        for track in selected_tracks:
+            query_points.append(
+                {
+                    "track_name": track.name,
+                    "frame": track.markers[-1].frame,
+                    "position": track.markers[-1].co,
+                }
+            )
+        return query_points
 
     def _get_video_frames(self, clip):
         """
@@ -262,6 +270,7 @@ class StartTracking(Operator):
             new_position = (0.5, 0.5)  # Replace with actual data from model_output
 
             # Insert the marker at the current frame
+            # TODO : Continue here
             marker = track.markers.insert(frame_number)
             marker.co = new_position  # Set the new position
 
@@ -270,11 +279,6 @@ class StartTracking(Operator):
     def execute(self, context):
         # Load the AI model
         if not self._build_model():
-            return {"CANCELLED"}
-
-        # Retrieve selected tracks
-        selected_tracks = self._retrieve_selected_tracks(context)
-        if selected_tracks is None:
             return {"CANCELLED"}
 
         # Get the movie clip
@@ -288,12 +292,22 @@ class StartTracking(Operator):
         if frames is None:
             return {"CANCELLED"}
 
+        # Retrieve selected tracks
+        selected_tracks = self._retrieve_selected_tracks(context)
+        query_points = torch.tensor(
+            [track["position"] * 255 for track in selected_tracks],
+            dtype=torch.int32,
+            device=self.device,
+        )
+        # N, 2 (H, W) -> N, 3 (T, H, W)
+        query_points = F.pad(query_points, (0, 1), value=0).unsqueeze(0)
+
+        self.tracker.init_tracker([frames[0]], query_points, self.device)
+
         # Process frames with the AI model
         for frame_number, frame in enumerate(frames):
-
-            output = self.model.predict_frame(frame)  # tracks, visibles
-            print(output)
-            self._update_tracks(selected_tracks, output, frame_number)
+            outputs = self.tracker.predict_frame([frame], self.device)
+            self._update_tracks(selected_tracks, outputs, frame_number)
 
         self.report({"INFO"}, "Tracking completed successfully.")
         return {"FINISHED"}
