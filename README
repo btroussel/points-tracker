@@ -1,0 +1,30 @@
+# Blender Point Tracker
+
+This project is a Blender addon that allows you to track points in a video using .
+
+The algorithm used to track poitns in the video is CoTrackerv2 (https://co-tracker.github.io/) or TapTrv2 (https://github.com/IDEA-Research/TAPTR).
+
+
+# TODO 
+
+## AI functionalities
+- [x] Run a Pytorch model inside Blender
+- [ ] Ask for user to prompt several tracking points
+- [ ] Handle clip length
+- [ ] Run the point tracker
+    - [ ] TapTrv2 (https://github.com/IDEA-Research/TAPTR)
+    - [ ] CoTrackerv2 (https://co-tracker.github.io/)
+- [ ] Export tracking points to Blender
+- [ ] Display the points on the image
+
+## UI 
+- [ ] Add a loading bar
+- [ ] Add guidelines in the panel
+- [ ] Can't click on the button if not point selected
+
+
+## Documentation
+- [ ] Write the documentation
+- [ ] Add a license
+- [ ] Add a README
+
