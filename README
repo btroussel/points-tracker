@@ -8,15 +8,15 @@ The algorithm used to track poitns in the video is BoostTAP under Apache 2 licen
 # TODO 
 
 ## Priority
-- [ ] Update Tracks from predictions 
-- [ ] Cleanup format, etc ...
-- [ ] Prompt points from all frames
-- [ ] Handle points from tracks with multiples points already
+- [ ] Better handle device during laod model + compile
+- [ ] Fix bug = coordinate system + time offset ?
 
 ## AI functionnalities 
 - [ ] Higher resolution precision 
 - [ ] Dataloader speedup
 - [ ] Pytorch Compile (?)
+
+# https://pytorch.org/TensorRT/getting_started/quick_start.html
 
 ## Blender plotting 
 - [ ] Export tracking points to Blender
@@ -26,6 +26,11 @@ The algorithm used to track poitns in the video is BoostTAP under Apache 2 licen
 - [ ] Loading bar + real time tracking showing on the video ?
 - [ ] Add guidelines in the panel
 - [ ] Can't click on the button if not point selected
+
+## User XP
+- [ ] Handle points from tracks with multiples points already
+- [ ] Take only isolated points ?
+- [ ] Generate random points ?
 
 ## Documentation
 - [ ] Write the documentation

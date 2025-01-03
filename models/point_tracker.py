@@ -68,10 +68,13 @@ class TAPIR(BasePointTracker, nn.Module):
 
     def init_tracker(self, frames, query_points, device):
         """
-        Frames [batch_size, time, height, width, channels]
-        Query points [batch_size, num_points, 3] T, H, W
+        frames list(np.array): List of frames {N (H W C)}
+        query_points {1 N (T H W)}
         """
-        # TODO : A lot of speedup to do there
+
+        # Process frames
+        end_frame = query_points[0, :, 0].max().item()
+        frames = frames[: end_frame + 1]
 
         frames = self._preprocess_frames(frames).unsqueeze(0).to(device)
         feature_grids = self.model.get_feature_grids(frames, is_training=False)
@@ -115,7 +118,7 @@ class TAPIR(BasePointTracker, nn.Module):
         occlusions = trajectories["occlusion"][-1]
         uncertainty = trajectories["expected_dist"][-1]
         visibles = self._postprocess_occlusions(occlusions, uncertainty)
-        return tracks, visibles
+        return tracks[0, :, 0], visibles[0, :, 0]
 
 
 # https://colab.research.google.com/github/deepmind/tapnet/blob/master/colabs/torch_causal_tapir_demo.ipynb#scrollTo=_LLK7myqp3Px

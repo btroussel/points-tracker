@@ -2,6 +2,7 @@ import bpy
 import os
 import torch
 import cv2
+from tqdm import tqdm
 from PIL import Image
 
 import torch.nn.functional as F
@@ -163,6 +164,7 @@ class StartTracking(Operator):
     def __init__(self):
         super().__init__()
         self.tracker_type = "tapir"
+        self.mode = "online"
 
     def _build_model(self):
         self.tracker = build_point_tracker(self.tracker_type)
@@ -209,16 +211,40 @@ class StartTracking(Operator):
             self.report({"ERROR"}, "Selected tracks not found in the current clip.")
             return None
 
-        # Extract track data for each selected track (last frame for now)
-        query_points = []
-        for track in selected_tracks:
-            query_points.append(
-                {
-                    "track_name": track.name,
-                    "frame": track.markers[-1].frame,
-                    "position": track.markers[-1].co,
-                }
-            )
+        return selected_tracks
+
+    def _extract_query_points(self, tracks):
+        """
+        Args : tracks (List[bpy.types.MovieTrackingTrack]): The tracks to extract query points from.
+        Format of markers : [W, H]
+
+        Returns: query_points (torch.Tensor): The query points as a tensor of shape {1 N (T H W)}
+
+        """
+
+        first_markers = [track.markers[0] for track in tracks]
+        frames = torch.tensor(
+            [marker.frame for marker in first_markers],
+            device=self.device,
+            dtype=torch.int32,
+        )
+        co_tensor = torch.stack(
+            [
+                torch.tensor(marker.co, device=self.device, dtype=torch.float32)
+                for marker in first_markers
+            ],
+            dim=0,
+        )
+        query_points = (
+            torch.cat((frames.unsqueeze(1), co_tensor * 255), dim=1)
+            .to(dtype=torch.int32)
+            .unsqueeze(0)
+        )
+
+        # Swap H and W coordinates
+        query_points[:, :, 0] -= 1
+        query_points[:, :, [1, 2]] = query_points[:, :, [2, 1]]
+
         return query_points
 
     def _get_video_frames(self, clip):
@@ -251,30 +277,33 @@ class StartTracking(Operator):
         cap.release()
         return frames
 
-    def _update_tracks(self, tracks, model_output, frame_number):
-        """
-        Updates the tracks with the model output.
+    @torch.no_grad()
+    def _online_tracking(self, frames, current_tracks):
 
-        Args:
-            tracks (List[bpy.types.MovieTrackingTrack]): The tracks to update.
-            model_output: The output from the AI model.
-            frame_number (int): The current frame number.
-        """
-        # Interpret model_output and update tracks accordingly
-        # This will depend on your model's output format
+        # Extract query points
+        query_points = self._extract_query_points(current_tracks)
+        start_frame = query_points[0, :, 0].min().item()
+        frames = frames[start_frame:]
+        query_points[0, :, 0] -= start_frame
 
-        # Example: Suppose model_output contains new positions for each track
-        for track in tracks:
-            # Get the new position for the track
-            # This is just a placeholder example
-            new_position = (0.5, 0.5)  # Replace with actual data from model_output
+        self.tracker.init_tracker(frames, query_points, self.device)
 
-            # Insert the marker at the current frame
-            # TODO : Continue here
-            marker = track.markers.insert(frame_number)
-            marker.co = new_position  # Set the new position
+        for frame_number, frame in tqdm(enumerate(frames)):
+            pred_tracks, pred_visibility = self.tracker.predict_frame(
+                [frame], self.device
+            )
+            for i in range(len(pred_tracks)):
+                if pred_visibility[i]:
+                    coord = pred_tracks[i].cpu().numpy() / 255
+                    current_tracks[i].markers.insert_frame(
+                        frame_number + start_frame
+                    ).co = coord
+        return
 
-            # Optionally set additional marker properties
+    @torch.no_grad()
+    def _offline_tracking(self, frames, current_tracks):
+        raise NotImplementedError
+        return
 
     def execute(self, context):
         # Load the AI model
@@ -293,21 +322,14 @@ class StartTracking(Operator):
             return {"CANCELLED"}
 
         # Retrieve selected tracks
-        selected_tracks = self._retrieve_selected_tracks(context)
-        query_points = torch.tensor(
-            [track["position"] * 255 for track in selected_tracks],
-            dtype=torch.int32,
-            device=self.device,
-        )
-        # N, 2 (H, W) -> N, 3 (T, H, W)
-        query_points = F.pad(query_points, (0, 1), value=0).unsqueeze(0)
+        current_tracks = self._retrieve_selected_tracks(context)
+        if current_tracks is None:
+            return {"CANCELLED"}
 
-        self.tracker.init_tracker([frames[0]], query_points, self.device)
-
-        # Process frames with the AI model
-        for frame_number, frame in enumerate(frames):
-            outputs = self.tracker.predict_frame([frame], self.device)
-            self._update_tracks(selected_tracks, outputs, frame_number)
+        if self.mode == "online":
+            self._online_tracking(frames, current_tracks)
+        else:
+            self._offline_tracking(frames, current_tracks)
 
         self.report({"INFO"}, "Tracking completed successfully.")
         return {"FINISHED"}
