@@ -277,7 +277,7 @@ class StartTracking(Operator):
         # Extract query points
         query_points = self._extract_query_points(current_tracks)
         start_frame = int(query_points[:, 0].min().item())
-        frames = frames[start_frame:]
+        frames = frames[start_frame - 1 :]
         query_points[:, 0] -= start_frame
 
         self.tracker.init_tracker(frames, query_points)
