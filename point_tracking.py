@@ -167,7 +167,6 @@ class StartTracking(Operator):
         self.mode = "online"
 
     def _build_model(self):
-        self.tracker = build_point_tracker(self.tracker_type)
 
         if torch.cuda.is_available():
             device = torch.device("cuda")
@@ -176,11 +175,13 @@ class StartTracking(Operator):
         else:
             device = torch.device("cpu")
 
-        self.device = device
-        self.tracker = self.tracker.to(device)
-        self.tracker.eval()
-
-        return True
+        try:
+            self.tracker = build_point_tracker(self.tracker_type, device)
+            self.tracker.to(device)
+            return True
+        except Exception as e:
+            self.report({"ERROR"}, f"Failed to build tracker: {e}")
+            return False
 
     def _retrieve_selected_tracks(self, context):
         """
@@ -222,28 +223,21 @@ class StartTracking(Operator):
 
         """
 
-        first_markers = [track.markers[0] for track in tracks]
+        try:
+            first_markers = [track.markers[0] for track in tracks]
+        except IndexError:
+            self.report({"ERROR"}, "One or more tracks do not have markers.")
+            return None
+
         frames = torch.tensor(
             [marker.frame for marker in first_markers],
-            device=self.device,
             dtype=torch.int32,
         )
         co_tensor = torch.stack(
-            [
-                torch.tensor(marker.co, device=self.device, dtype=torch.float32)
-                for marker in first_markers
-            ],
+            [torch.tensor(marker.co, dtype=torch.float32) for marker in first_markers],
             dim=0,
         )
-        query_points = (
-            torch.cat((frames.unsqueeze(1), co_tensor * 255), dim=1)
-            .to(dtype=torch.int32)
-            .unsqueeze(0)
-        )
-
-        # Swap H and W coordinates
-        query_points[:, :, 0] -= 1
-        query_points[:, :, [1, 2]] = query_points[:, :, [2, 1]]
+        query_points = torch.cat((frames.unsqueeze(1), co_tensor), dim=1)
 
         return query_points
 
@@ -282,19 +276,18 @@ class StartTracking(Operator):
 
         # Extract query points
         query_points = self._extract_query_points(current_tracks)
-        start_frame = query_points[0, :, 0].min().item()
+        start_frame = int(query_points[:, 0].min().item())
         frames = frames[start_frame:]
-        query_points[0, :, 0] -= start_frame
+        query_points[:, 0] -= start_frame
 
-        self.tracker.init_tracker(frames, query_points, self.device)
+        self.tracker.init_tracker(frames, query_points)
 
         for frame_number, frame in tqdm(enumerate(frames)):
-            pred_tracks, pred_visibility = self.tracker.predict_frame(
-                [frame], self.device
-            )
+            pred_tracks, pred_visibility = self.tracker.predict_frame([frame])
             for i in range(len(pred_tracks)):
                 if pred_visibility[i]:
-                    coord = pred_tracks[i].cpu().numpy() / 255
+                    coord = pred_tracks[i].cpu().numpy()
+                    coord[1] = 1 - coord[1]
                     current_tracks[i].markers.insert_frame(
                         frame_number + start_frame
                     ).co = coord
