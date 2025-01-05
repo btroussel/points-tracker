@@ -60,6 +60,12 @@ def init_properties():
         max=4320,
     )
 
+    bpy.types.Scene.device = bpy.props.EnumProperty(
+        name="Compute Mode",
+        description="Select CPU or GPU",
+        items=[("CPU", "CPU", ""), ("GPU", "GPU", "")],
+    )
+
 
 def clear_properties():
     del bpy.types.Scene.selected_points_display
@@ -97,7 +103,11 @@ class MotionTrackingPanel(Panel):
 
         ## Settings
         layout.separator()
-        layout.label(text="Settings")
+        layout.label(text="Model Settings")
+
+        # CPU/GPU/MPS Selector
+        row = layout.row()
+        row.prop(scene, "device", expand=True)
 
         # Boolean setting (checkbox)
         row = layout.row()
@@ -166,12 +176,18 @@ class StartTracking(Operator):
         self.tracker_type = "tapir"
         self.mode = "online"
 
-    def _build_model(self):
+    def _build_model(self, context):
 
-        if torch.cuda.is_available():
-            device = torch.device("cuda")
-        elif torch.backends.mps.is_available():
-            device = torch.device("mps")
+        selected_device = context.scene.device
+        if selected_device == "GPU":
+            if torch.cuda.is_available():
+                device = torch.device("cuda")
+            elif torch.backends.mps.is_available():
+                device = torch.device("mps")
+            else:
+                device = torch.device("cpu")
+                print("GPU not available, defaulting to CPU mode.")
+                self.report({"WARNING"}, "GPU not available, defaulting to CPU mode.")
         else:
             device = torch.device("cpu")
 
@@ -300,7 +316,7 @@ class StartTracking(Operator):
 
     def execute(self, context):
         # Load the AI model
-        if not self._build_model():
+        if not self._build_model(context):
             return {"CANCELLED"}
 
         # Get the movie clip

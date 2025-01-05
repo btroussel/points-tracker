@@ -5,39 +5,40 @@ This project is a Blender addon that allows you to track points in a video using
 The algorithm used to track poitns in the video is BoostTAP under Apache 2 license.
 
 
+# https://colab.research.google.com/github/deepmind/tapnet/blob/master/colabs/torch_causal_tapir_demo.ipynb#scrollTo=_LLK7myqp3Px
+
 # TODO 
 
 ## Priority
-- [ ] Better handle device during laod model + compile
-- [ ] Fix bug = coordinate system + time offset ?
+
+
+
+
 
 ## AI functionnalities 
 - [ ] Higher resolution precision 
 - [ ] Dataloader speedup
-- [ ] Pytorch Compile (?)
 
 # https://pytorch.org/TensorRT/getting_started/quick_start.html
-
-## Blender plotting 
-- [ ] Export tracking points to Blender
-- [ ] Display the points on the image
 
 ## UI 
 - [ ] Loading bar + real time tracking showing on the video ?
 - [ ] Add guidelines in the panel
-- [ ] Can't click on the button if not point selected
+- [ ] Can't click on the button if not point selecte
 
 ## User XP
 - [ ] Handle points from tracks with multiples points already
 - [ ] Take only isolated points ?
 - [ ] Generate random points ?
+- [ ] Automatically select points ?
 
 ## Documentation
 - [ ] Write the documentation
 - [ ] Add a license
 - [ ] Add a README
 
-## Concurrent
+## Study concurrent
 - TrueDepth
 - FlaxTrax
+
  Image sequence vs videos blender input ? 

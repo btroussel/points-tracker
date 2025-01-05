@@ -56,6 +56,7 @@ class TAPIR(nn.Module, BasePointTracker):
         self.model.load_state_dict(
             torch.load(self.model_path, map_location=self.device)
         )
+        self.model = torch.compile(self.model)
         self.model.eval()
 
     def _preprocess_frames(self, frames):
@@ -137,6 +138,3 @@ class TAPIR(nn.Module, BasePointTracker):
             tracks, (self.resize_width, self.resize_height), (1, 1)
         )
         return tracks[0, :, 0], visibles[0, :, 0]
-
-
-# https://colab.research.google.com/github/deepmind/tapnet/blob/master/colabs/torch_causal_tapir_demo.ipynb#scrollTo=_LLK7myqp3Px
