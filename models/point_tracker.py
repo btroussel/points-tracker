@@ -23,7 +23,7 @@ class BasePointTracker(ABC):
 
 
 class TAPIR(nn.Module, BasePointTracker):
-    def __init__(self, device):
+    def __init__(self, mode, resolution, device):
         super().__init__()
 
         self.model_path = os.path.join(
@@ -34,8 +34,8 @@ class TAPIR(nn.Module, BasePointTracker):
             "causal_bootstapir_checkpoint.pt",
         )
         self.use_causal_conv = True
-        self.resize_height = 256
-        self.resize_width = 256
+        self.resize_height = resolution[0]
+        self.resize_width = resolution[1]
         # Transformations
         # TODO : Speed up with a dataloader for parallel processing
         self.preprocess = transforms.Compose(

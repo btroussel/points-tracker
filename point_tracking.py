@@ -1,6 +1,7 @@
 import bpy
 import os
 import torch
+import numpy as np
 import cv2
 from tqdm import tqdm
 from PIL import Image
@@ -18,6 +19,13 @@ class SelectedTrackItem(PropertyGroup):
     name: bpy.props.StringProperty(name="Track Name")
 
 
+# Define a mapping from string identifiers to resolution tuples
+RESOLUTION_OPTIONS = {
+    "256x256": (256, 256),
+    "512x512": (512, 512),
+}
+
+
 def init_properties():
     bpy.types.Scene.selected_points_display = bpy.props.StringProperty(
         name="Selected Points Display",
@@ -29,51 +37,39 @@ def init_properties():
         type=SelectedTrackItem
     )
 
-    bpy.types.Scene.bool_setting = bpy.props.BoolProperty(
-        name="Enable Feature", description="A boolean setting example", default=False
-    )
-
-    bpy.types.Scene.enum_setting = bpy.props.EnumProperty(
-        name="Mode",
-        description="Choose a mode",
-        items=[
-            ("OPTION_A", "Option A", ""),
-            ("OPTION_B", "Option B", ""),
-            ("OPTION_C", "Option C", ""),
-        ],
-        default="OPTION_A",
-    )
-
-    bpy.types.Scene.float_setting = bpy.props.FloatProperty(
-        name="Tracking Speed",
-        description="Adjust the tracking speed",
-        default=1.0,
-        min=0.1,
-        max=10.0,
-    )
-
-    bpy.types.Scene.int_setting = bpy.props.IntProperty(
-        name="Tracking Resolution",
-        description="Set the tracking resolution",
-        default=1080,
-        min=480,
-        max=4320,
-    )
-
     bpy.types.Scene.device = bpy.props.EnumProperty(
         name="Compute Mode",
         description="Select CPU or GPU",
-        items=[("CPU", "CPU", ""), ("GPU", "GPU", "")],
+        items=[
+            ("GPU", "GPU", ""),
+            ("CPU", "CPU", ""),
+        ],
+        default="GPU",
+    )
+
+    bpy.types.Scene.mode = bpy.props.EnumProperty(
+        name="Compute Mode",
+        description="Select CPU or GPU",
+        items=[
+            ("Online", "Online", ""),
+            ("Offline", "Offline", ""),
+        ],
+        default="Online",
+    )
+    bpy.types.Scene.resolution = bpy.props.EnumProperty(
+        name="Resolution",
+        description="Select the desired resolution",
+        items=[
+            ("256x256", "256x256", "Set resolution to 256x256 pixels"),
+            ("512x512", "512x512", "Set resolution to 512x512 pixels"),
+        ],
+        default="256x256",
     )
 
 
 def clear_properties():
     del bpy.types.Scene.selected_points_display
     del bpy.types.Scene.selected_tracks
-    del bpy.types.Scene.bool_setting
-    del bpy.types.Scene.enum_setting
-    del bpy.types.Scene.float_setting
-    del bpy.types.Scene.int_setting
 
 
 class MotionTrackingPanel(Panel):
@@ -88,45 +84,39 @@ class MotionTrackingPanel(Panel):
         scene = context.scene
 
         # Section for selecting points
-        layout.label(text="Point Selection")
+        layout.label(text="Tracks Selection")
         row = layout.row()
-        row.operator("point_tracking.select_points", text="Select Points")
+        row.operator("point_tracking.select_points", text="Select Tracks")
+        row = layout.row()
+        row.operator(
+            "point_tracking.select_isolated_points", text="Select Isolated Tracks"
+        )  # New Button
 
         # Display selected points
-        layout.label(text="Selected Points:")
+        layout.label(text="Selected Tracks:")
         row = layout.row()
         row.prop(scene, "selected_points_display", text="")
 
-        # Start tracking button
-        row = layout.row()
-        row.operator("point_tracking.start_tracking", text="Start Tracking")
-
         ## Settings
         layout.separator()
-        layout.label(text="Model Settings")
+        layout.label(text="Model Settings :")
 
         # CPU/GPU/MPS Selector
         row = layout.row()
         row.prop(scene, "device", expand=True)
 
-        # Boolean setting (checkbox)
+        # Online/Offline Selector
         row = layout.row()
-        row.prop(scene, "bool_setting", text="Enable Feature")
+        row.prop(scene, "mode", expand=True)
 
-        # Enum setting (dropdown)
+        # Resolution Selector
         row = layout.row()
-        row.prop(scene, "enum_setting", text="Mode")
+        row.prop(scene, "resolution", expand=True)
 
-        # Float setting (slider)
+        # Start tracking button
+        layout.label(text="Start Tracking:")
         row = layout.row()
-        row.prop(scene, "float_setting", text="Tracking Speed")
-
-        # Integer setting (number input)
-        row = layout.row()
-        row.prop(scene, "int_setting", text="Tracking Resolution")
-
-        # TODO : Create spline for tracking to have more tracks
-        # TODO : Integrate a loading bar for tracking
+        row.operator("point_tracking.start_tracking", text="Go !")
 
 
 class SelectPoints(Operator):
@@ -141,8 +131,6 @@ class SelectPoints(Operator):
 
         # Get selected tracks
         selected_tracks = [track for track in clip.tracking.tracks if track.select]
-
-        # TODO : Only select isolated tracking points ? Assert
 
         # Clear existing selected tracks
         context.scene.selected_tracks.clear()
@@ -166,6 +154,54 @@ class SelectPoints(Operator):
         return {"FINISHED"}
 
 
+class SelectIsolatedPoints(Operator):
+    bl_idname = "point_tracking.select_isolated_points"
+    bl_label = "Select Isolated Points"
+    bl_description = (
+        "Select tracking points that have only one marker (isolated points)"
+    )
+
+    def execute(self, context):
+        clip = context.edit_movieclip
+        if clip is None:
+            self.report({"ERROR"}, "No movie clip selected")
+            return {"CANCELLED"}
+
+        # Find isolated tracks (tracks with only one marker)
+        isolated_tracks = [
+            track for track in clip.tracking.tracks if len(track.markers) == 1
+        ]
+
+        # Clear existing selection
+        for track in clip.tracking.tracks:
+            track.select = False
+
+        # Select isolated tracks
+        for track in isolated_tracks:
+            track.select = True
+
+        # Clear existing selected_tracks in the scene
+        context.scene.selected_tracks.clear()
+
+        # Add selected isolated track names to the collection
+        for track in isolated_tracks:
+            item = context.scene.selected_tracks.add()
+            item.name = track.name
+
+        # Update the display
+        num_selected = len(isolated_tracks)
+        context.scene.selected_points_display = (
+            f"{num_selected} isolated point{'s' if num_selected != 1 else ''} selected"
+        )
+
+        self.report(
+            {"INFO"},
+            f"{num_selected} isolated point{'s' if num_selected != 1 else ''} selected.",
+        )
+
+        return {"FINISHED"}
+
+
 class StartTracking(Operator):
     bl_idname = "point_tracking.start_tracking"
     bl_label = "Start Tracking"
@@ -174,7 +210,6 @@ class StartTracking(Operator):
     def __init__(self):
         super().__init__()
         self.tracker_type = "tapir"
-        self.mode = "online"
 
     def _build_model(self, context):
 
@@ -192,7 +227,12 @@ class StartTracking(Operator):
             device = torch.device("cpu")
 
         try:
-            self.tracker = build_point_tracker(self.tracker_type, device)
+            self.tracker = build_point_tracker(
+                tracker_type=self.tracker_type,
+                mode=context.scene.mode,
+                resolution=RESOLUTION_OPTIONS[context.scene.resolution],
+                device=device,
+            )
             self.tracker.to(device)
             return True
         except Exception as e:
@@ -288,7 +328,7 @@ class StartTracking(Operator):
         return frames
 
     @torch.no_grad()
-    def _online_tracking(self, frames, current_tracks):
+    def _online_tracking(self, frames, current_tracks, context):
 
         # Extract query points
         query_points = self._extract_query_points(current_tracks)
@@ -304,9 +344,14 @@ class StartTracking(Operator):
                 if pred_visibility[i]:
                     coord = pred_tracks[i].cpu().numpy()
                     coord[1] = 1 - coord[1]
-                    current_tracks[i].markers.insert_frame(
-                        frame_number + start_frame
-                    ).co = coord
+
+                    # Assuming coord has exactly two elements
+                    if 0 <= coord[0] <= 1 and 0 <= coord[1] <= 1:
+                        current_tracks[i].markers.insert_frame(
+                            frame_number + start_frame
+                        ).co = coord
+                    else:
+                        print("Some values have been outside of the frames.")
         return
 
     @torch.no_grad()
@@ -335,8 +380,8 @@ class StartTracking(Operator):
         if current_tracks is None:
             return {"CANCELLED"}
 
-        if self.mode == "online":
-            self._online_tracking(frames, current_tracks)
+        if context.scene.mode == "Online":
+            self._online_tracking(frames, current_tracks, context)
         else:
             self._offline_tracking(frames, current_tracks)
 
@@ -349,6 +394,7 @@ classes = (
     SelectedTrackItem,
     MotionTrackingPanel,
     SelectPoints,
+    SelectIsolatedPoints,
     StartTracking,
 )
 

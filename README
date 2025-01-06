@@ -9,28 +9,45 @@ The algorithm used to track poitns in the video is BoostTAP under Apache 2 licen
 
 # TODO 
 
-## Priority
+## Priority 
+- [ ] Random plot of points around the scene (current frame)
+- [ ] Not freeze blender while processing.
+- [ ] Plot timing and loading bar
+- [ ] Aspect Ratio
+- [ ] TensorRT
+- [ ] Maybe not using "Marker" ? 
+- [ ] Track Backward / Forward
 
+Why would it be good ?
+- [] Motion blur 
 
-
-
+## Bug correction 
+- [ ] Set some configuration as : 
+    - Range of the video to process
+    - Match image sequences below 
+    - Show video to process 
+- [ ] Can't click on the button if not point selected
+ 
+## Camera calibration
+- [ ] Random plot of points around the scene and over time
+- [ ] Number of points per frame (for low gpu memory)
+- [ ] Automatic camera calibration in the future.
+- [ ] Implement camera solving with depth map ? 
+- [ ] Project points to 3D with depth map ?
+- [ ] Focal length ? 
 
 ## AI functionnalities 
-- [ ] Higher resolution precision 
 - [ ] Dataloader speedup
+- [ ] Offline mode (high gpu memory)
+- [ ] Backward inference
+- [ ] Aspect Ratio
+- [ ] Load model in TensorRT
 
 # https://pytorch.org/TensorRT/getting_started/quick_start.html
 
 ## UI 
-- [ ] Loading bar + real time tracking showing on the video ?
+- [ ] Loading bar / real time tracking showing on the video (modal ?)
 - [ ] Add guidelines in the panel
-- [ ] Can't click on the button if not point selecte
-
-## User XP
-- [ ] Handle points from tracks with multiples points already
-- [ ] Take only isolated points ?
-- [ ] Generate random points ?
-- [ ] Automatically select points ?
 
 ## Documentation
 - [ ] Write the documentation
@@ -40,5 +57,3 @@ The algorithm used to track poitns in the video is BoostTAP under Apache 2 licen
 ## Study concurrent
 - TrueDepth
 - FlaxTrax
-
- Image sequence vs videos blender input ? 
