@@ -1,13 +1,8 @@
 import bpy
-import os
 import torch
-import numpy as np
 import cv2
 from tqdm import tqdm
-from PIL import Image
 
-import torch.nn.functional as F
-from torchvision import models, transforms
 from bpy.types import Panel, Operator, PropertyGroup
 
 from .models import build_point_tracker
@@ -60,8 +55,8 @@ def init_properties():
         name="Resolution",
         description="Select the desired resolution",
         items=[
-            ("256x256", "256x256", "Set resolution to 256x256 pixels"),
-            ("512x512", "512x512", "Set resolution to 512x512 pixels"),
+            ("256x256", "Low Res", "Set resolution to 256x256 pixels"),
+            ("512x512", "High Res", "Set resolution to 512x512 pixels"),
         ],
         default="256x256",
     )

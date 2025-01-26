@@ -10,12 +10,9 @@ The algorithm used to track poitns in the video is BoostTAP under Apache 2 licen
 # TODO 
 
 ## Priority 
-- [ ] Random plot of points around the scene (current frame)
+
 - [ ] Not freeze blender while processing.
 - [ ] Plot timing and loading bar
-- [ ] Aspect Ratio
-- [ ] TensorRT
-- [ ] Maybe not using "Marker" ? 
 - [ ] Track Backward / Forward
 
 Why would it be good ?
@@ -41,7 +38,7 @@ Why would it be good ?
 - [ ] Offline mode (high gpu memory)
 - [ ] Backward inference
 - [ ] Aspect Ratio
-- [ ] Load model in TensorRT
+- [X] Load model in TensorRT => ONNX not working.
 
 # https://pytorch.org/TensorRT/getting_started/quick_start.html
 
