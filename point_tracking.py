@@ -101,8 +101,8 @@ class MotionTrackingPanel(Panel):
         row.prop(scene, "device", expand=True)
 
         # Online/Offline Selector
-        row = layout.row()
-        row.prop(scene, "mode", expand=True)
+        # row = layout.row()
+        # row.prop(scene, "mode", expand=True)
 
         # Resolution Selector
         row = layout.row()
@@ -205,9 +205,14 @@ class StartTracking(Operator):
     def __init__(self):
         super().__init__()
         self.tracker_type = "tapir"
+        self.frames = None
+        self.current_tracks = None
+        self.device = None
+        self.frame_index = 0
+        self.start_frame = 0
+        self.total_frames = 0  # Will store the total frames to process
 
     def _build_model(self, context):
-
         selected_device = context.scene.device
         if selected_device == "GPU":
             if torch.cuda.is_available():
@@ -229,26 +234,18 @@ class StartTracking(Operator):
                 device=device,
             )
             self.tracker.to(device)
+            self.device = device
             return True
         except Exception as e:
             self.report({"ERROR"}, f"Failed to build tracker: {e}")
             return False
 
     def _retrieve_selected_tracks(self, context):
-        """
-        Retrieves the selected tracks from the scene's stored selection.
-
-        Returns:
-            List[bpy.types.MovieTrackingTrack]: A list of selected tracks.
-            Returns None if no tracks are selected or if there's an error.
-        """
-        # Get the selected track names from the scene property
         selected_track_names = [item.name for item in context.scene.selected_tracks]
         if not selected_track_names:
             self.report({"ERROR"}, "No points selected. Please select points first.")
             return None
 
-        # Retrieve all track from the clip that match names
         clip = context.edit_movieclip
         if clip is None:
             self.report({"ERROR"}, "No movie clip selected")
@@ -266,14 +263,6 @@ class StartTracking(Operator):
         return selected_tracks
 
     def _extract_query_points(self, tracks):
-        """
-        Args : tracks (List[bpy.types.MovieTrackingTrack]): The tracks to extract query points from.
-        Format of markers : [W, H]
-
-        Returns: query_points (torch.Tensor): The query points as a tensor of shape {1 N (T H W)}
-
-        """
-
         try:
             first_markers = [track.markers[0] for track in tracks]
         except IndexError:
@@ -281,27 +270,16 @@ class StartTracking(Operator):
             return None
 
         frames = torch.tensor(
-            [marker.frame for marker in first_markers],
-            dtype=torch.int32,
+            [marker.frame for marker in first_markers], dtype=torch.int32
         )
         co_tensor = torch.stack(
             [torch.tensor(marker.co, dtype=torch.float32) for marker in first_markers],
             dim=0,
         )
         query_points = torch.cat((frames.unsqueeze(1), co_tensor), dim=1)
-
         return query_points
 
     def _get_video_frames(self, clip):
-        """
-        Retrieves all frames from the video clip using OpenCV.
-
-        Args:
-            clip (bpy.types.MovieClip): The movie clip to read frames from.
-
-        Returns:
-            List[np.ndarray]: A list of frames as numpy arrays.
-        """
         video_path = bpy.path.abspath(clip.filepath)
         cap = cv2.VideoCapture(video_path)
 
@@ -323,65 +301,112 @@ class StartTracking(Operator):
         return frames
 
     @torch.no_grad()
-    def _online_tracking(self, frames, current_tracks, context):
+    def _online_tracking_init(self, context):
+        query_points = self._extract_query_points(self.current_tracks)
+        if query_points is None:
+            return False
 
-        # Extract query points
-        query_points = self._extract_query_points(current_tracks)
-        start_frame = int(query_points[:, 0].min().item())
-        frames = frames[start_frame - 1 :]
-        query_points[:, 0] -= start_frame
+        self.start_frame = int(query_points[:, 0].min().item())
+        self.frames = self.frames[self.start_frame - 1 :]
+        query_points[:, 0] -= self.start_frame
+        self.tracker.init_tracker(self.frames, query_points)
+        return True
 
-        self.tracker.init_tracker(frames, query_points)
+    @torch.no_grad()
+    def _online_tracking_step(self, context):
+        # Check if all frames have been processed
+        if self.frame_index >= len(self.frames):
+            return False
 
-        for frame_number, frame in tqdm(enumerate(frames)):
-            pred_tracks, pred_visibility = self.tracker.predict_frame([frame])
-            for i in range(len(pred_tracks)):
-                if pred_visibility[i]:
-                    coord = pred_tracks[i].cpu().numpy()
-                    coord[1] = 1 - coord[1]
+        # Report progress in the console or Info bar
+        current_frame_global = self.frame_index + self.start_frame
+        self.report(
+            {"INFO"},
+            f"Tracking frame {current_frame_global}/{self.start_frame + self.total_frames - 1}",
+        )
 
-                    # Assuming coord has exactly two elements
-                    if 0 <= coord[0] <= 1 and 0 <= coord[1] <= 1:
-                        current_tracks[i].markers.insert_frame(
-                            frame_number + start_frame
-                        ).co = coord
-                    else:
-                        print("Some values have been outside of the frames.")
-        return
+        frame = self.frames[self.frame_index]
+        pred_tracks, pred_visibility = self.tracker.predict_frame([frame])
+
+        for i in range(len(pred_tracks)):
+            if pred_visibility[i]:
+                coord = pred_tracks[i].cpu().numpy()
+                coord[1] = 1 - coord[1]  # Flip Y to match Blender coords
+
+                if 0 <= coord[0] <= 1 and 0 <= coord[1] <= 1:
+                    self.current_tracks[i].markers.insert_frame(
+                        current_frame_global
+                    ).co = coord
+                else:
+                    print("Some coordinates are outside of the frame boundaries.")
+
+        # Update the displayed frame in the movie-clip editor and timeline
+        context.scene.frame_current = current_frame_global
+        for area in context.screen.areas:
+            if area.type == "CLIP_EDITOR":
+                for space in area.spaces:
+                    if space.type == "CLIP_EDITOR" and space.clip_user is not None:
+                        space.clip_user.frame_current = current_frame_global
+
+        # Update Blender's progress bar
+        context.window_manager.progress_update(current_frame_global)
+
+        self.frame_index += 1
+        return True
 
     @torch.no_grad()
     def _offline_tracking(self, frames, current_tracks):
         raise NotImplementedError
-        return
 
-    def execute(self, context):
-        # Load the AI model
+    def invoke(self, context, event):
         if not self._build_model(context):
             return {"CANCELLED"}
 
-        # Get the movie clip
         clip = context.edit_movieclip
         if clip is None:
             self.report({"ERROR"}, "No movie clip selected")
             return {"CANCELLED"}
 
-        # Get video frames
-        frames = self._get_video_frames(clip)
-        if frames is None:
+        self.frames = self._get_video_frames(clip)
+        if self.frames is None:
             return {"CANCELLED"}
 
-        # Retrieve selected tracks
-        current_tracks = self._retrieve_selected_tracks(context)
-        if current_tracks is None:
+        # Keep track of total frames for progress bar
+        self.total_frames = len(self.frames)
+
+        self.current_tracks = self._retrieve_selected_tracks(context)
+        if self.current_tracks is None:
             return {"CANCELLED"}
 
         if context.scene.mode == "Online":
-            self._online_tracking(frames, current_tracks, context)
+            if not self._online_tracking_init(context):
+                return {"CANCELLED"}
         else:
-            self._offline_tracking(frames, current_tracks)
+            raise NotImplementedError("Offline tracking not yet implemented")
 
-        self.report({"INFO"}, "Tracking completed successfully.")
-        return {"FINISHED"}
+        # Start the progress bar: min=0, max=total_frames
+        print(self.start_frame, self.total_frames)
+        context.window_manager.progress_begin(self.start_frame, self.total_frames)
+        context.window_manager.modal_handler_add(self)
+        return {"RUNNING_MODAL"}
+
+    def modal(self, context, event):
+        if event.type in {"ESC", "RIGHTMOUSE"}:
+            self.report({"WARNING"}, "Tracking canceled by user.")
+            context.window_manager.progress_end()  # End the progress bar on cancel
+            return {"CANCELLED"}
+
+        if context.scene.mode == "Online":
+            running = self._online_tracking_step(context)
+            if not running:
+                self.report({"INFO"}, "Tracking completed successfully.")
+                # End the progress bar once finished
+                context.window_manager.progress_end()
+                return {"FINISHED"}
+        else:
+            raise NotImplementedError("Offline modal stepping not yet implemented")
+
+        return {"RUNNING_MODAL"}
 
 
 # Registration

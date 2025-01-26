@@ -11,12 +11,8 @@ The algorithm used to track poitns in the video is BoostTAP under Apache 2 licen
 
 ## Priority 
 
-- [ ] Not freeze blender while processing.
-- [ ] Plot timing and loading bar
 - [ ] Track Backward / Forward
 
-Why would it be good ?
-- [] Motion blur 
 
 ## Bug correction 
 - [ ] Set some configuration as : 
