@@ -1,6 +1,7 @@
 import bpy
 import torch
 import cv2
+import os
 from tqdm import tqdm
 
 from bpy.types import Panel, Operator, PropertyGroup
@@ -280,24 +281,49 @@ class StartTracking(Operator):
         return query_points
 
     def _get_video_frames(self, clip):
-        video_path = bpy.path.abspath(clip.filepath)
-        cap = cv2.VideoCapture(video_path)
+        """
+        Load frames from a MovieClip, handling both MOVIE (single file)
+        and SEQUENCE (multiple image files) sources.
+        Returns a list of frames as NumPy arrays (BGR by default with cv2).
+        """
+        # Check the type of the MovieClip (MOVIE or SEQUENCE)
+        source_type = clip.source
+        frames = []
 
-        if not cap.isOpened():
-            self.report({"ERROR"}, f"Unable to open video file: {video_path}")
+        if source_type == "MOVIE":
+            # Handle MOVIE (single video file)
+            video_path = bpy.path.abspath(clip.filepath)
+            cap = cv2.VideoCapture(video_path)
+
+            if not cap.isOpened():
+                self.report({"ERROR"}, f"Unable to open movie file: {video_path}")
+                return None
+
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+            for i in range(frame_count):
+                ret, frame = cap.read()
+                if not ret:
+                    self.report({"ERROR"}, f"Failed to read frame {i} from video.")
+                    break
+                frames.append(frame)
+
+            cap.release()
+
+        elif source_type == "SEQUENCE":
+            directory = os.path.dirname(bpy.path.abspath(clip.filepath))
+            for f in clip.files:
+                seq_filepath = os.path.join(directory, f.name)
+                frame = cv2.imread(seq_filepath)
+                if frame is None:
+                    self.report({"ERROR"}, f"Failed to read {seq_filepath}")
+                    break
+                frames.append(frame)
+
+        else:
+            self.report({"ERROR"}, f"Unsupported clip source type: {source_type}")
             return None
 
-        frames = []
-        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        for i in range(frame_count):
-            ret, frame = cap.read()
-            if not ret:
-                self.report({"ERROR"}, f"Failed to read frame {i} from video.")
-                break
-            frames.append(frame)
-
-        cap.release()
         return frames
 
     @torch.no_grad()
