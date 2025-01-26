@@ -22,6 +22,7 @@
 
 ## Demonstration Video
 
+https://github.com/btroussel/blender_pointtracker/assets/demo.mp4
 [![Demo Video]](assets/demo.mp4)
 
 *Click the image above to watch a demonstration of PointsTracker in action.*
