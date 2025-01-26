@@ -20,7 +20,7 @@ from typing import Any, List, Mapping, NamedTuple, Optional, Sequence, Tuple
 import numpy as np
 
 # import tree
-
+import einops
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -653,19 +653,30 @@ class TAPIR(nn.Module):
             ],
             axis=-1,
         )
-        x = utils.einshape("bnfc->(bn)fc", mlp_input)
+
+        x = einops.rearrange(mlp_input, "b n f c -> (b n) f c")
 
         if causal_context is not None:
             for k, v in causal_context.items():
-                causal_context[k] = utils.einshape("bn...->(bn)...", v)
+                causal_context[k] = einops.rearrange(v, "b n ... -> (b n) ...")
+
         res, new_causal_context = self.torch_pips_mixer(
             x.float(), causal_context, get_causal_context
         )
-        res = utils.einshape("(bn)fc->bnfc", res, b=mlp_input.shape[0])
+
+        res = einops.rearrange(
+            res,
+            "(b n) f c -> b n f c",
+            b=mlp_input.shape[0],
+        )
+
         if get_causal_context:
             for k, v in new_causal_context.items():
-                new_causal_context[k] = utils.einshape(
-                    "(bn)...->bn...", v, b=mlp_input.shape[0]
+
+                new_causal_context[k] = einops.rearrange(
+                    v,
+                    "(b n) ... -> b n ...",
+                    b=mlp_input.shape[0],
                 )
 
         pos_update = utils.convert_grid_coordinates(
@@ -722,7 +733,7 @@ class TAPIR(nn.Module):
 
         shape = cost_volume.shape
         batch_size, num_points = cost_volume.shape[1:3]
-        cost_volume = utils.einshape("tbnhw->(tbn)hw1", cost_volume)
+        cost_volume = einops.rearrange(cost_volume, "t b n h w -> (t b n) h w 1")
 
         cost_volume = cost_volume.permute(0, 3, 1, 2)
         occlusion = mods["hid1"](cost_volume)
@@ -730,9 +741,15 @@ class TAPIR(nn.Module):
 
         pos = mods["hid2"](occlusion)
         pos = pos.permute(0, 2, 3, 1)
-        pos_rshp = utils.einshape("(tb)hw1->t(b)hw1", pos, t=shape[0])
+        pos_rshp = einops.rearrange(pos, "(t b) h w 1 -> t b h w 1", t=shape[0])
 
-        pos = utils.einshape("t(bn)hw1->bnthw", pos_rshp, b=batch_size, n=num_points)
+        pos = einops.rearrange(
+            pos_rshp,
+            "t (b n) h w 1 -> b n t h w",
+            b=batch_size,
+            n=num_points,
+        )
+
         pos_sm = pos.reshape(pos.size(0), pos.size(1), pos.size(2), -1)
         softmaxed = F.softmax(pos_sm * self.softmax_temperature, dim=-1)
         pos = softmaxed.view_as(pos)
@@ -747,11 +764,18 @@ class TAPIR(nn.Module):
         occlusion = torch.nn.functional.relu(occlusion)
         occlusion = mods["occ_out"](occlusion)
 
-        expected_dist = utils.einshape(
-            "(tbn)1->bnt", occlusion[..., 1:2], n=shape[2], t=shape[0]
+        expected_dist = einops.rearrange(
+            occlusion[..., 1:2],
+            "(t b n) 1 -> b n t",
+            t=shape[0],
+            n=shape[2],
         )
-        occlusion = utils.einshape(
-            "(tbn)1->bnt", occlusion[..., 0:1], n=shape[2], t=shape[0]
+
+        occlusion = einops.rearrange(
+            occlusion[..., 0:1],
+            "(t b n) 1 -> b n t",
+            t=shape[0],
+            n=shape[2],
         )
         return points, occlusion, expected_dist
 

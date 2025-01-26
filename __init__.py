@@ -27,7 +27,7 @@ import os
 import sys
 
 # Add lib directory to Python path
-# To install a lib do : pip install tree -t .\lib\ ? (not sure)
+# To install a lib do : pip install <library> -t .\lib\
 addon_dir = os.path.dirname(__file__)
 lib_dir = os.path.join(addon_dir, "lib")
 if os.path.exists(lib_dir) and lib_dir not in sys.path:
