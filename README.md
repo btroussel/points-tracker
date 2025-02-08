@@ -1,8 +1,8 @@
 ![alt text](assets/demo.gif)
 
-[![Latest Release](https://flat.badgen.net/github/release/btroussel/points-tracker)](https://github.com/btroussel/points-tracker/releases/latest)
-[![Total Downloads](https://img.shields.io/github/downloads/btroussel/points-tracker/total?style=flat-square)](https://github.com/btroussel/points-tracker/releases/latest)
-[![Buy on Blender Market](https://flat.badgen.net/badge/buy/blender%20market/orange)](https://www.blendermarket.com/products/points-tracker)
+<!-- [![Latest Release](https://flat.badgen.net/github/release/btroussel/points-tracker)](https://github.com/btroussel/points-tracker/releases/latest) -->
+<!-- [![Total Downloads](https://img.shields.io/github/downloads/btroussel/points-tracker/total?style=flat-square)](https://github.com/btroussel/points-tracker/releases/latest) -->
+<!-- [![Buy on Blender Market](https://flat.badgen.net/badge/buy/blender%20market/orange)](https://www.blendermarket.com/products/points-tracker) -->
 [![Follow @Be_Roussel](https://badgen.net/badge/Follow/@Be_Roussel/1DA1F2?icon=twitter&labelColor=000000&textColor=ffffff)](https://x.com/Be_Roussel)
 
 **PointsTracker** is a Blender add-on that leverages AI-powered models to effortlessly track points in your videos. Designed with user-friendliness in mind, it eliminates the need for tracking markers and manual tracking, providing a seamless tracking experience through advanced AI technology.
@@ -11,7 +11,8 @@
 
 ## Installation ⚙️
 
-1. **Download the Add-on:**
+Not ready for release yet. Stay tuned!
+<!-- 1. **Download the Add-on:**
    - Get the [latest release](https://github.com/btroussel/points-tracker/releases/latest).
 
 2. **Install in Blender:**
@@ -21,7 +22,7 @@
    - Enable the add-on by checking the box next to **PointsTracker**.
 
 3. **Activate:**
-   - Once installed, PointsTracker is ready to use. Refer to the [Usage](#usage) section to get started.
+   - Once installed, PointsTracker is ready to use. Refer to the [Usage](#usage) section to get started. -->
 
 ## Usage 💻
 
@@ -33,8 +34,6 @@ Follow these steps to start tracking points with PointsTracker:
 
 2. **Select Markers:**
    - Choose the markers you wish to track. You can `Select Tracks` or `Select Isolated Tracks`.
-
-   
 
 3. **Configure Settings:**
    - Select your preferred processing mode (`GPU` or `CPU`).
@@ -51,7 +50,7 @@ If you find the tracking accuracy insufficient, press `Escape` or `Right Click` 
 
 Here is the side panel of the addon as a reference : 
 
-![Side Panel of the addon.](image.png)
+![Side Panel of the addon.](assets/sidepanel.png)
 
 
 ## Compatibility 💻

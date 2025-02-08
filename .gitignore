@@ -2,3 +2,6 @@ lib/
 resources/
 __pycache__/
 README_update
+.vscode/
+checkpoints/
+.python_dependecies/
