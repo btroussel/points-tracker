@@ -2,12 +2,10 @@ import bpy
 import torch
 import cv2
 import os
-from tqdm import tqdm
 
 from bpy.types import Panel, Operator, PropertyGroup
 
 from .models import build_point_tracker
-from .utils import get_vars_from_context
 
 # ---------------------------------------------------------------------------
 #  Property Group & Global Properties

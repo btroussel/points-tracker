@@ -13,11 +13,11 @@ import bpy
 import os
 import sys
 
-
 addon_dir = os.path.dirname(__file__)
-lib_dir = os.path.join(addon_dir, "lib")
+lib_dir = os.path.join(addon_dir, ".python_dependencies")
 if os.path.exists(lib_dir) and lib_dir not in sys.path:
     sys.path.append(lib_dir)
+    print("Added 'lib' directory to sys.path")
 else:
     print("Warning: 'lib' directory not found. Dependencies may be missing.")
 
